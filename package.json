@@ -1,0 +1,29 @@
+{
+  "name": "ticketplus-middleware",
+  "version": "1.0.0",
+  "description": "API  RestFul para TicketPlus",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RaulHernandez23/ticketplus-middleware.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RaulHernandez23/ticketplus-middleware/issues"
+  },
+  "homepage": "https://github.com/RaulHernandez23/ticketplus-middleware#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
