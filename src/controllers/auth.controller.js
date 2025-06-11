@@ -1,6 +1,7 @@
 const User = require("../models/Usuario");
 const bcrypt = require("bcrypt");
 const { generarJWT } = require("../utils/generateToken");
+const { invalidarJWT } = require("../utils/deleteToken");
 
 const login = async (req, res) => {
 	const { correo, contraseña } = req.body;
@@ -36,6 +37,24 @@ const login = async (req, res) => {
 	}
 };
 
+const logout = async (req, res) => {
+	try {
+		const token = req.header("x-token");
+
+		if (!token) {
+			return res.status(401).json({ mensaje: "Token no proporcionado" });
+		}
+
+		invalidarJWT(token);
+
+		res.json({ mensaje: "Sesión cerrada exitosamente" });
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ mensaje: "Error interno del servidor" });
+	}
+}
+
 module.exports = {
 	login,
+	logout,
 };
