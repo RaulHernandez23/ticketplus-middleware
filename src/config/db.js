@@ -1,8 +1,9 @@
 const { Sequelize } = require("sequelize");
 
-const sequelize = new Sequelize("nombre_basedatos", "usuario", "contraseña", {
+const sequelize = new Sequelize("ticketplus", "ticketuser", "ticketpass", {
 	host: "localhost",
-	dialect: "mysql", // o 'postgres'
+	port: 3307,
+	dialect: "mysql",
 	logging: false,
 });
 
