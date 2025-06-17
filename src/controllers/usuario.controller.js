@@ -24,12 +24,9 @@ const registrarUsuario = async (req, res) => {
 			!codigo_postal ||
 			!id_pais
 		) {
-			return res
-				.status(400)
-				.json({
-					mensaje:
-						"Todos los campos obligatorios deben estar completos.",
-				});
+			return res.status(400).json({
+				mensaje: "Todos los campos obligatorios deben estar completos.",
+			});
 		}
 
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
@@ -45,11 +42,9 @@ const registrarUsuario = async (req, res) => {
 		}
 
 		if (contrasena.length < 8) {
-			return res
-				.status(400)
-				.json({
-					mensaje: "La contraseña debe tener al menos 8 caracteres.",
-				});
+			return res.status(400).json({
+				mensaje: "La contraseña debe tener al menos 8 caracteres.",
+			});
 		}
 
 		const existente = await Usuario.findOne({ where: { correo } });
@@ -76,14 +71,89 @@ const registrarUsuario = async (req, res) => {
 		return res.status(201).json({ mensaje: "Registro exitoso." });
 	} catch (error) {
 		console.error("Error en registro:", error);
+		return res.status(500).json({
+			mensaje: "Ocurrió un error inesperado. Inténtalo más tarde.",
+		});
+	}
+};
+
+const actualizarUsuario = async (req, res) => {
+	const {
+		nombre,
+		apellido_paterno,
+		apellido_materno,
+		id_pais,
+		codigo_postal,
+		correo,
+		contraseña_actual,
+		nueva_contraseña,
+		confirmar_contraseña,
+	} = req.body;
+
+	try {
+		const usuario = await Usuario.findOne(req.correo);
+
+		if (!usuario) {
+			return res.status(404).json({ mensaje: "Usuario no encontrado" });
+		}
+
+		if (!nombre || !apellido_paterno || !id_pais || !codigo_postal) {
+			return res
+				.status(400)
+				.json({ mensaje: "Faltan campos obligatorios" });
+		}
+
+		if (nueva_contraseña || confirmar_contraseña || contraseña_actual) {
+			if (
+				!contraseña_actual ||
+				!nueva_contraseña ||
+				!confirmar_contraseña
+			) {
+				return res
+					.status(400)
+					.json({
+						mensaje:
+							"Todos los campos de contraseña son requeridos",
+					});
+			}
+
+			if (nueva_contraseña !== confirmar_contraseña) {
+				return res
+					.status(400)
+					.json({ mensaje: "Las nuevas contraseñas no coinciden" });
+			}
+
+			const esValida = await bcrypt.compare(
+				contraseña_actual,
+				usuario.contrasena
+			);
+			if (!esValida) {
+				return res
+					.status(400)
+					.json({ mensaje: "La contraseña actual es incorrecta" });
+			}
+
+			usuario.contrasena = await bcrypt.hash(nueva_contraseña, 10);
+		}
+
+		usuario.nombre = nombre;
+		usuario.apellido_paterno = apellido_paterno;
+		usuario.apellido_materno = apellido_materno;
+		usuario.id_pais = id_pais;
+		usuario.codigo_postal = codigo_postal;
+
+		await usuario.save();
+
 		return res
-			.status(500)
-			.json({
-				mensaje: "Ocurrió un error inesperado. Inténtalo más tarde.",
-			});
+			.status(200)
+			.json({ mensaje: "Perfil actualizado exitosamente" });
+	} catch (error) {
+		console.error(error);
+		return res.status(500).json({ mensaje: "Error interno del servidor" });
 	}
 };
 
 module.exports = {
 	registrarUsuario,
+	actualizarUsuario,
 };

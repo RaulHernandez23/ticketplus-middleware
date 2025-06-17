@@ -1,7 +1,7 @@
 const User = require("../models/Usuario");
 const bcrypt = require("bcrypt");
-const { generarJWT } = require("../utils/generateToken");
-const { invalidarJWT } = require("../utils/deleteToken");
+const { generarJWT } = require("../middlewares/generateToken");
+const { invalidarJWT } = require("../middlewares/deleteToken");
 
 const login = async (req, res) => {
 	const { correo, contraseña } = req.body;
