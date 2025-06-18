@@ -10,6 +10,7 @@ app.use(cors());
 app.use(express.json());
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/boletos", boletoRoutes);
 app.use("/api/paises", paisRoutes);
 
 module.exports = app;
