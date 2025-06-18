@@ -22,6 +22,11 @@ const RecuperacionContrasena = sequelize.define(
             allowNull: false,
             defaultValue: DataTypes.NOW,
         },
+        estado: {
+            type: DataTypes.ENUM("activo", "inactivo"),
+            allowNull: false,
+            defaultValue: "activo",
+        }
     },
     {
         tableName: "recuperacion_contrasena",

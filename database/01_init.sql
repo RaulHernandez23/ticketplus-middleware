@@ -153,6 +153,7 @@ CREATE TABLE `recuperacion_contrasena` (
 	`id_usuario` INTEGER NOT NULL,
 	`token` VARCHAR(255) NOT NULL,
 	`fecha_expiracion` DATETIME NOT NULL,
+	`estado` ENUM('activo', 'inactivo') NOT NULL DEFAULT 'activo',
 	PRIMARY KEY(`id_recuperacion`)
 );
 

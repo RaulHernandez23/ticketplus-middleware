@@ -119,8 +119,60 @@ const recuperarContraseña = async (req, res) => {
 	}
 };
 
+const verificarCodigoRecuperacion = async (req, res) => {
+	const { correo, codigo, nueva_contrasena, confirmar_contrasena } = req.body;
+
+	if (!correo || !codigo || !nueva_contrasena || !confirmar_contrasena) {
+		return res.status(400).json({ mensaje: "Todos los campos son obligatorios." });
+	}
+
+	if (nueva_contrasena !== confirmar_contrasena) {
+		return res.status(400).json({ mensaje: "Las contraseñas no coinciden." });
+	}
+
+	try {
+		const usuario = await User.findOne({ where: { correo } });
+
+		if (!usuario) {
+			return res.status(404).json({ mensaje: "Usuario no encontrado." });
+		}
+
+		// Buscar código más reciente válido
+		const registro = await RecuperacionContrasena.findOne({
+			where: {
+				id_usuario: usuario.id_usuario,
+				token: codigo,
+				estado: "activo",
+			},
+			order: [["fecha_expiracion", "DESC"]],
+		});
+
+		if (!registro) {
+			return res.status(404).json({ mensaje: "Código inválido." });
+		}
+
+		if (new Date() > new Date(registro.fecha_expiracion)) {
+			return res.status(400).json({ mensaje: "El código ha expirado." });
+		}
+
+		// Cambiar la contraseña
+		const hashed = await bcrypt.hash(nueva_contrasena, 10);
+		usuario.contrasena = hashed;
+		await usuario.save();
+
+		// Deasctivar el código usado
+		await registro.update({ estado: "inactivo" });
+
+		return res.status(200).json({ mensaje: "Contraseña actualizada correctamente." });
+	} catch (error) {
+		console.error("Error al verificar código:", error);
+		return res.status(500).json({ mensaje: "Error interno del servidor." });
+	}
+};
+
 module.exports = {
 	login,
 	logout,
 	recuperarContraseña,
+	verificarCodigoRecuperacion
 };
