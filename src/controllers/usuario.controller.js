@@ -176,7 +176,39 @@ const actualizarUsuario = async (req, res) => {
 	}
 };
 
+const recuperarUsuario = async (req, res) => {
+	const { id_usuario } = req.params;
+
+	try {
+		if (!id_usuario) {
+			return res.status(400).json({ mensaje: "ID de usuario requerido" });
+		}
+
+		const usuario = await Usuario.findOne({ where: { id_usuario } });
+
+		if (!usuario) {
+			return res.status(404).json({ mensaje: "Usuario no encontrado" });
+		}
+
+		return res.status(200).json({
+			id_usuario: usuario.id_usuario,
+			nombre: usuario.nombre,
+			apellido_paterno: usuario.apellido_paterno,
+			apellido_materno: usuario.apellido_materno,
+			correo: usuario.correo,
+			codigo_postal: usuario.codigo_postal,
+			id_pais: usuario.id_pais,
+			estado: usuario.estado,
+			fecha_registro: usuario.fecha_registro,
+		});
+	} catch (error) {
+		console.error("Error al recuperar el perfil:", error);
+		return res.status(500).json({ mensaje: "Error interno del servidor" });
+	}
+};
+
 module.exports = {
 	registrarUsuario,
 	actualizarUsuario,
+	recuperarUsuario,
 };
