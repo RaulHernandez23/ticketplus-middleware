@@ -1,7 +1,9 @@
 const User = require("../models/Usuario");
+const RecuperacionContrasena = require("../models/RecuperacionContrasena");
 const bcrypt = require("bcrypt");
 const { generarJWT } = require("../middlewares/generateToken");
 const { invalidarJWT } = require("../middlewares/deleteToken");
+const enviarCorreoRecuperacion = require("../utils/enviarCorreo").enviarCorreoRecuperacion;
 
 const login = async (req, res) => {
 	const { correo, contraseña } = req.body;
@@ -59,9 +61,66 @@ const logout = async (req, res) => {
 		console.error(error);
 		res.status(500).json({ mensaje: "Error interno del servidor" });
 	}
+};
+
+function generarCodigoRecuperacion() {
+	const longitud = 6;
+	const caracteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	let codigo = "";
+
+	for (let i = 0; i < longitud; i++) {
+		const indice = Math.floor(Math.random() * caracteres.length);
+		codigo += caracteres.charAt(indice);
+	}
+
+	const expiracion = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+	return { codigo, expiracion };
 }
+
+const recuperarContraseña = async (req, res) => {
+	const { correo } = req.body;
+
+	if (!correo) {
+		return res.status(400).json({ mensaje: "El correo es obligatorio." });
+	}
+
+	try {
+		const usuario = await User.findOne({ where: { correo } });
+
+		if (!usuario) {
+			return res.status(404).json({ mensaje: "Correo no registrado." });
+		}
+
+		const { codigo, expiracion } = generarCodigoRecuperacion();
+
+		// Guardar el código en la tabla recuperacion_contrasena
+		await RecuperacionContrasena.create({
+			id_usuario: usuario.id_usuario,
+			token: codigo,
+			fecha_expiracion: expiracion,
+		});
+
+		// Enviar correo
+		const asunto = "Recuperación de contraseña - TicketPlus";
+		const texto = `Hola ${usuario.nombre},\n\nTu código de recuperación es: ${codigo}.\nEste código es válido por 10 minutos.\n\nSi no solicitaste esto, puedes ignorar este mensaje.`;
+
+		await enviarCorreoRecuperacion(usuario.correo, asunto, texto);
+
+		return res.status(200).json({
+			mensaje: "Código de recuperación enviado correctamente.",
+		});
+	} catch (error) {
+		console.error("Error al iniciar recuperación de contraseña:", error);
+		return res
+			.status(500)
+			.json({
+				mensaje: "Error interno del servidor. Intenta más tarde.",
+			});
+	}
+};
 
 module.exports = {
 	login,
 	logout,
+	recuperarContraseña,
 };
