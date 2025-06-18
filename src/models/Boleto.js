@@ -2,6 +2,8 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 const Usuario = require("./Usuario");
 const FuncionPrecio = require("./FuncionPrecio");
+const Asiento = require("./Asiento");
+const Pago = require("./Pago");
 
 const Boleto = sequelize.define(
   "Boleto",
@@ -29,5 +31,7 @@ const Boleto = sequelize.define(
 // Asociaciones
 Boleto.belongsTo(Usuario, { foreignKey: "id_usuario" });
 Boleto.belongsTo(FuncionPrecio, { foreignKey: "id_evento_precio" });
+Boleto.belongsTo(Asiento, { foreignKey: "id_asiento" });
+Boleto.belongsTo(Pago, { foreignKey: "id_pago" });
 
 module.exports = Boleto;

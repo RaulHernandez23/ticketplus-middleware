@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
-const Evento = require("./Evento");
+const Funcion = require("./Funcion");
+const Zona = require("./Zona");
 
 const FuncionPrecio = sequelize.define(
   "FuncionPrecio",
@@ -19,5 +20,8 @@ const FuncionPrecio = sequelize.define(
     timestamps: false,
   }
 );
+
+FuncionPrecio.belongsTo(Funcion, { foreignKey: "id_funcion" });
+FuncionPrecio.belongsTo(Zona, { foreignKey: "id_zona" });
 
 module.exports = FuncionPrecio;
