@@ -6,13 +6,30 @@ const Evento = sequelize.define(
   {
     id_evento: {
       type: DataTypes.INTEGER,
-      primaryKey: true,
       autoIncrement: true,
+      primaryKey: true,
     },
-    titulo: DataTypes.STRING,
-    banner_url: DataTypes.STRING,
-    id_artista: DataTypes.INTEGER,
-    id_categoria: DataTypes.INTEGER,
+    titulo: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    //Atributo faltante - Descripcion
+    descripcion: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    banner_url: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    id_artista: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    id_categoria: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
   },
   {
     tableName: "evento",

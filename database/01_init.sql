@@ -22,6 +22,7 @@ ON `usuario` (`correo`);
 CREATE TABLE `evento` (
 	`id_evento` INTEGER NOT NULL AUTO_INCREMENT UNIQUE,
 	`titulo` VARCHAR(255) NOT NULL,
+	`descripcion` VARCHAR(300) NOT NULL,
 	`banner_url` VARCHAR(255) NOT NULL,
 	`id_artista` INTEGER NOT NULL,
 	`id_categoria` INTEGER NOT NULL,
