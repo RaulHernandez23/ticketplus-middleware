@@ -277,7 +277,7 @@ CREATE TABLE `transferencia_boleto` (
 	`id_boleto` INTEGER NOT NULL UNIQUE,
 	`id_usuario_origen` INTEGER NOT NULL,
 	`id_usuario_destino` INTEGER NOT NULL,
-	`fecha_transferencia` INTEGER NOT NULL,
+	`fecha_transferencia` DATETIME NOT NULL,
 	`tipo_transferencia` ENUM('venta', 'regalo') NOT NULL,
 	PRIMARY KEY(`id_transferencia`)
 );
