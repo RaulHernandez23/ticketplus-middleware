@@ -19,10 +19,10 @@ INSERT INTO artista (nombre, banner_url) VALUES
 INSERT INTO evento (titulo, descripcion, banner_url, id_artista, id_categoria) VALUES
 ('Grupo Firme en Vivo',
 'Una noche explosiva llena de música regional mexicana con Grupo Firme, interpretando sus más grandes éxitos en un concierto lleno de energía, fiesta y emociones.',
-'https://img.com/evento1.png', 1, 1),
+'bannerGrupoFirme.png', 1, 1),
 ('Sanz Tour 2025',
 'Disfruta de una velada inolvidable con Alejandro Sanz en su gira 2025, donde presentará sus clásicos y nuevos temas en un show cargado de emoción y talento.',
-'https://img.com/evento2.png', 2, 1);
+'bannerSanz.png', 2, 1);
 
 INSERT INTO recinto (nombre, calle, numero, ciudad, estado) VALUES
 ('Auditorio Nacional', 'Reforma', '50', 'CDMX', 'activo');
