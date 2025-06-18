@@ -79,6 +79,7 @@ const registrarUsuario = async (req, res) => {
 
 const actualizarUsuario = async (req, res) => {
 	const {
+		id_usuario,
 		nombre,
 		apellido_paterno,
 		apellido_materno,
@@ -91,7 +92,11 @@ const actualizarUsuario = async (req, res) => {
 	} = req.body;
 
 	try {
-		const usuario = await Usuario.findOne(req.correo);
+		if (!id_usuario) {
+			return res.status(400).json({ mensaje: "ID de usuario requerido" });
+		}
+
+		const usuario = await Usuario.findOne({ where: { id_usuario } });
 
 		if (!usuario) {
 			return res.status(404).json({ mensaje: "Usuario no encontrado" });
@@ -103,18 +108,35 @@ const actualizarUsuario = async (req, res) => {
 				.json({ mensaje: "Faltan campos obligatorios" });
 		}
 
+		// Validar correo duplicado (si intenta cambiarlo)
+		if (correo && correo !== usuario.correo) {
+			const correoExistente = await Usuario.findOne({
+				where: {
+					correo,
+					id_usuario: { [Op.ne]: id_usuario }, // cualquier usuario que NO sea él mismo
+				},
+			});
+
+			if (correoExistente) {
+				return res
+					.status(409)
+					.json({
+						mensaje: "El correo ya está en uso por otro usuario",
+					});
+			}
+
+			usuario.correo = correo;
+		}
+
 		if (nueva_contraseña || confirmar_contraseña || contraseña_actual) {
 			if (
 				!contraseña_actual ||
 				!nueva_contraseña ||
 				!confirmar_contraseña
 			) {
-				return res
-					.status(400)
-					.json({
-						mensaje:
-							"Todos los campos de contraseña son requeridos",
-					});
+				return res.status(400).json({
+					mensaje: "Todos los campos de contraseña son requeridos",
+				});
 			}
 
 			if (nueva_contraseña !== confirmar_contraseña) {
@@ -127,6 +149,7 @@ const actualizarUsuario = async (req, res) => {
 				contraseña_actual,
 				usuario.contrasena
 			);
+
 			if (!esValida) {
 				return res
 					.status(400)
@@ -148,7 +171,7 @@ const actualizarUsuario = async (req, res) => {
 			.status(200)
 			.json({ mensaje: "Perfil actualizado exitosamente" });
 	} catch (error) {
-		console.error(error);
+		console.error("Error al actualizar el perfil:", error);
 		return res.status(500).json({ mensaje: "Error interno del servidor" });
 	}
 };

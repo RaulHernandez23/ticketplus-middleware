@@ -28,7 +28,14 @@ const login = async (req, res) => {
 			token,
 			usuario: {
 				id_usuario: usuario.id_usuario,
-				nombre: usuario.nombre
+				nombre: usuario.nombre,
+				apellido_paterno: usuario.apellido_paterno,
+				apellido_materno: usuario.apellido_materno,
+				correo: usuario.correo,
+				fecha_registro: usuario.fecha_registro,
+				estado: usuario.estado,
+				codigo_postal: usuario.codigo_postal,
+				id_pais: usuario.id_pais,
 			},
 		});
 	} catch (error) {
