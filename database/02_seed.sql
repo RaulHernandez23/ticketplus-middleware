@@ -2,8 +2,8 @@ USE ticketplus;
 SET NAMES utf8mb4;
 
 INSERT INTO pais (pais, codigo_iso_2, url_bandera) VALUES
-('México', 'MX', 'https://flags.com/mx.png'),
-('Estados Unidos', 'US', 'https://flags.com/us.png');
+('México', 'MX', '/flags/mx.png'),
+('Estados Unidos', 'US', '/flags/us.png');
 
 INSERT INTO usuario (nombre, apellido_paterno, apellido_materno, correo, contrasena, fecha_registro, estado, codigo_postal, id_pais) VALUES
 ('Carlos', 'Ramírez', 'López', 'carlos@example.com', SHA2('pass1', 256), NOW(), 'activo', '01000', 1),
