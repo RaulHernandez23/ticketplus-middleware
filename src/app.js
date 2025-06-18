@@ -14,9 +14,6 @@ app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/boletos", boletoRoutes);
 app.use("/api/paises", paisRoutes);
-app.use('/api/usuarios', usuarioRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/paises', paisRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/eventos', eventoRoutes);
 

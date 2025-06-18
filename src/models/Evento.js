@@ -13,7 +13,6 @@ const Evento = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    //Atributo faltante - Descripcion
     descripcion: {
         type: DataTypes.STRING,
         allowNull: false,
