@@ -74,4 +74,4 @@ INSERT INTO notificacion (id_usuario, id_funcion, tipo_notificacion, mensaje, en
 (1, 1, 'funcion nueva', '¡Nuevo evento disponible!', true, NOW());
 
 INSERT INTO transferencia_boleto (id_boleto, id_usuario_origen, id_usuario_destino, fecha_transferencia, tipo_transferencia) VALUES
-(1, 1, 2, UNIX_TIMESTAMP(), 'venta');
+(1, 1, 2, NOW(), 'venta');
