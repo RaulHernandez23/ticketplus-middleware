@@ -49,6 +49,7 @@ CREATE TABLE `boleto` (
 	`fecha_compra` DATETIME NOT NULL,
 	`estado` ENUM('disponible', 'reservado', 'pagado', 'reembolsado', 'cancelado', 'transferido', 'usado', 'expirado') NOT NULL,
 	`id_asiento` INTEGER NOT NULL,
+	`id_funcion` INTEGER NOT NULL,
 	`codigo_qr` VARCHAR(510) NOT NULL UNIQUE,
 	`url_codigo` VARCHAR(255) NOT NULL,
 	PRIMARY KEY(`id_boleto`)
@@ -392,4 +393,7 @@ ADD FOREIGN KEY(`id_usuario_destino`) REFERENCES `usuario`(`id_usuario`)
 ON UPDATE NO ACTION ON DELETE NO ACTION;
 ALTER TABLE `usuario`
 ADD FOREIGN KEY(`id_pais`) REFERENCES `pais`(`id_pais`)
+ON UPDATE NO ACTION ON DELETE NO ACTION;
+ALTER TABLE `boleto`
+ADD FOREIGN KEY (`id_funcion`) REFERENCES `funcion`(`id_funcion`)
 ON UPDATE NO ACTION ON DELETE NO ACTION;

@@ -58,8 +58,8 @@ INSERT INTO paypal (id_metodo_pago, correo_paypal) VALUES
 INSERT INTO pago (costo_servicio, monto_total, fecha_pago, estado, id_descuento, id_metodo_pago) VALUES
 (50.00, 1350.00, NOW(), 'pendiente', 1, 1);
 
-INSERT INTO boleto (id_evento_precio, id_pago, id_usuario, fecha_compra, estado, id_asiento, codigo_qr, url_codigo) VALUES
-(1, 1, 1, NOW(), 'pagado', 1, 'QR123ABC', 'https://qr.com/QR123ABC');
+INSERT INTO boleto (id_evento_precio, id_pago, id_usuario, fecha_compra, estado, id_asiento, id_funcion, codigo_qr, url_codigo) VALUES
+(1, 1, 1, NOW(), 'pagado', 1, 1, 'QR123ABC', 'https://qr.com/QR123ABC');
 
 INSERT INTO recuperacion_contrasena (id_usuario, token, fecha_expiracion) VALUES
 (1, 'TOKEN123', DATE_ADD(NOW(), INTERVAL 1 DAY));
