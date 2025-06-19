@@ -1,9 +1,13 @@
 const User = require("../models/Usuario");
 const RecuperacionContrasena = require("../models/RecuperacionContrasena");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const { SECRET_KEY } = require("../middlewares/config");
+const { invalidTokens } = require("../middlewares/deleteToken");
 const { generarJWT } = require("../middlewares/generateToken");
 const { invalidarJWT } = require("../middlewares/deleteToken");
-const enviarCorreoRecuperacion = require("../utils/enviarCorreo").enviarCorreoRecuperacion;
+const enviarCorreoRecuperacion =
+	require("../utils/enviarCorreo").enviarCorreoRecuperacion;
 
 const login = async (req, res) => {
 	const { correo, contraseña } = req.body;
@@ -111,20 +115,19 @@ const recuperarContraseña = async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error al iniciar recuperación de contraseña:", error);
-		return res
-			.status(500)
-			.json({
-				mensaje: "Error interno del servidor. Intenta más tarde.",
-			});
+		return res.status(500).json({
+			mensaje: "Error interno del servidor. Intenta más tarde.",
+		});
 	}
 };
 
 const verificarCodigoRecuperacion = async (req, res) => {
 	const { correo, codigo } = req.body;
-	
 
 	if (!correo || !codigo) {
-		return res.status(400).json({ mensaje: "Correo y código son obligatorios." });
+		return res
+			.status(400)
+			.json({ mensaje: "Correo y código son obligatorios." });
 	}
 
 	try {
@@ -152,7 +155,12 @@ const verificarCodigoRecuperacion = async (req, res) => {
 			return res.status(400).json({ mensaje: "El código ha expirado." });
 		}
 
-		return res.status(200).json({ mensaje: "Código válido.", id_usuario: usuario.id_usuario });
+		return res
+			.status(200)
+			.json({
+				mensaje: "Código válido.",
+				id_usuario: usuario.id_usuario,
+			});
 	} catch (error) {
 		console.error("Error al validar código:", error);
 		return res.status(500).json({ mensaje: "Error interno del servidor." });
@@ -160,14 +168,19 @@ const verificarCodigoRecuperacion = async (req, res) => {
 };
 
 const cambiarContrasenaConCodigo = async (req, res) => {
-	const { id_usuario, codigo, nueva_contrasena, confirmar_contrasena } = req.body;
+	const { id_usuario, codigo, nueva_contrasena, confirmar_contrasena } =
+		req.body;
 
 	if (!id_usuario || !codigo || !nueva_contrasena || !confirmar_contrasena) {
-		return res.status(400).json({ mensaje: "Todos los campos son obligatorios." });
+		return res
+			.status(400)
+			.json({ mensaje: "Todos los campos son obligatorios." });
 	}
 
 	if (nueva_contrasena !== confirmar_contrasena) {
-		return res.status(400).json({ mensaje: "Las contraseñas no coinciden." });
+		return res
+			.status(400)
+			.json({ mensaje: "Las contraseñas no coinciden." });
 	}
 
 	try {
@@ -187,7 +200,9 @@ const cambiarContrasenaConCodigo = async (req, res) => {
 		});
 
 		if (!registro) {
-			return res.status(404).json({ mensaje: "Código inválido o ya usado." });
+			return res
+				.status(404)
+				.json({ mensaje: "Código inválido o ya usado." });
 		}
 
 		if (new Date() > new Date(registro.fecha_expiracion)) {
@@ -201,10 +216,34 @@ const cambiarContrasenaConCodigo = async (req, res) => {
 
 		await registro.update({ estado: "inactivo" });
 
-		return res.status(200).json({ mensaje: "Contraseña actualizada correctamente." });
+		return res
+			.status(200)
+			.json({ mensaje: "Contraseña actualizada correctamente." });
 	} catch (error) {
 		console.error("Error al cambiar contraseña:", error);
 		return res.status(500).json({ mensaje: "Error interno del servidor." });
+	}
+};
+
+const validarVidaToken = (req, res) => {
+	const token = req.header("x-token");
+
+	if (!token) {
+		return res.status(401).json({ mensaje: "Token no proporcionado" });
+	}
+
+	if (invalidTokens.has(token)) {
+		return res.status(401).json({ mensaje: "Token inválido o revocado" });
+	}
+
+	try {
+		const decoded = jwt.verify(token, SECRET_KEY);
+		return res
+			.status(200)
+			.json({ mensaje: "Token válido", id_usuario: decoded.uid });
+	} catch (error) {
+		console.error("Token inválido:", error);
+		return res.status(401).json({ mensaje: "Token inválido o expirado" });
 	}
 };
 
@@ -214,4 +253,5 @@ module.exports = {
 	recuperarContraseña,
 	verificarCodigoRecuperacion,
 	cambiarContrasenaConCodigo,
+	validarVidaToken,
 };
