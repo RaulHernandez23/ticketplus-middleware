@@ -100,7 +100,7 @@ CREATE TABLE `pago` (
 	`costo_servicio` DECIMAL NOT NULL,
 	`monto_total` DECIMAL NOT NULL,
 	`fecha_pago` DATETIME NOT NULL,
-	`estado` ENUM('pendiente', 'procesando', 'fallido', 'cancelado', 'reembolsado') NOT NULL,
+	`estado` ENUM('completado','pendiente', 'procesando', 'fallido', 'cancelado', 'reembolsado') NOT NULL,
 	`id_descuento` INTEGER,
 	`id_metodo_pago` INTEGER NOT NULL,
 	PRIMARY KEY(`id_pago`)

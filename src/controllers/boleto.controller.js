@@ -11,7 +11,11 @@ const Pago = require("../models/Pago");
 const SolicitudReembolso = require("../models/SolicitudReembolso");
 const TransferenciaBoleto = require("../models/TransferenciaBoleto");
 const crypto = require("crypto");
+const Descuento = require("../models/Descuento"); // Asegúrate de tener este modelo
+const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../config/db");
+const { Op } = require("sequelize");
+
 
 const enviarBoleto = async (req, res) => {
   const id_boleto = req.params.id_boleto;
@@ -405,6 +409,156 @@ const transferirBoletos = async (req, res) => {
   }
 };
 
+const registrarVenta = async (req, res) => {
+  const { id_funcion, id_zona, id_asiento, id_metodo_pago, codigo_descuento } = req.body;
+  const uid = req.uid; // Autenticación previa
+
+  const t = await sequelize.transaction();
+  try {
+    // 1. Verifica que el asiento no esté ocupado
+    const boletoExistente = await Boleto.findOne({
+      where: {
+        id_funcion,
+        id_asiento,
+        estado: ["pagado", "usado", "reservado"],
+      },
+      transaction: t,
+    });
+
+    if (boletoExistente) {
+      await t.rollback();
+      return res.status(409).json({ mensaje: "El asiento ya está ocupado." });
+    }
+
+    // 2. Buscar precio
+    const funcionPrecio = await FuncionPrecio.findOne({
+      where: { id_funcion, id_zona },
+      transaction: t,
+    });
+
+    if (!funcionPrecio) {
+      await t.rollback();
+      return res.status(404).json({ mensaje: "Precio no disponible para esta función/zona." });
+    }
+
+    let precio = parseFloat(funcionPrecio.precio);
+    const costo_servicio = 10.00; // Fijo o configurable
+    let descuento = 0;
+    let id_descuento = null;
+
+    // 3. Validar descuento si viene
+    if (codigo_descuento) {
+      const descuentoRow = await Descuento.findOne({
+        where: {
+          codigo: codigo_descuento,
+          estado: "activo",
+          fecha_inicio: { [Op.lte]: new Date() },
+          fecha_fin: { [Op.gte]: new Date() },
+        },
+        transaction: t,
+      });
+
+      if (descuentoRow) {
+        id_descuento = descuentoRow.id_descuento;
+        descuento =
+          descuentoRow.tipo === "porcentaje"
+            ? (precio * descuentoRow.valor) / 100
+            : descuentoRow.valor;
+      }
+    }
+
+    const monto_total = precio + costo_servicio - descuento;
+
+    // 4. Crear el pago
+    const pago = await Pago.create(
+      {
+        costo_servicio,
+        monto_total,
+        fecha_pago: new Date(),
+        estado: "procesando",
+        id_descuento,
+        id_metodo_pago,
+      },
+      { transaction: t }
+    );
+
+    // 5. Crear el boleto
+    const codigo_qr = uuidv4();
+    const url_codigo = `https://ticketplus.com/qr/${codigo_qr}`;
+
+    const boleto = await Boleto.create(
+      {
+        id_evento_precio: funcionPrecio.id_funcion_precio,
+        id_pago: pago.id_pago,
+        id_usuario: uid,
+        fecha_compra: new Date(),
+        estado: "pagado",
+        id_asiento,
+        id_funcion,
+        codigo_qr,
+        url_codigo,
+      },
+      { transaction: t }
+    );
+
+    // 6. Actualizar pago
+    await pago.update({ estado: "completado" }, { transaction: t });
+
+    await t.commit();
+    return res.status(201).json({
+      mensaje: "Boleto vendido exitosamente.",
+      id_boleto: boleto.id_boleto,
+      url_codigo: boleto.url_codigo,
+    });
+  } catch (error) {
+    await t.rollback();
+    console.error("Error en registrarVenta:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
+const mapaAsientos = async (req, res) => {
+  const { id_funcion, id_zona } = req.query;
+
+  if (!id_funcion || !id_zona) {
+    return res.status(400).json({ mensaje: "id_funcion y id_zona son requeridos" });
+  }
+
+  try {
+    // 1. Obtener todos los asientos de la zona
+    const asientos = await Asiento.findAll({
+      where: { id_zona },
+      include: [{ model: Zona }],
+      order: [["fila", "ASC"], ["numero", "ASC"]],
+    });
+
+    // 2. Obtener boletos ocupados para esa función
+    const boletosOcupados = await Boleto.findAll({
+      where: {
+        id_funcion,
+        estado: ["pagado", "reservado", "usado", "transferido"],
+      },
+      attributes: ["id_asiento"],
+    });
+
+    const asientosOcupados = new Set(boletosOcupados.map(b => b.id_asiento));
+
+    // 3. Armar estructura de mapa
+    const resultado = asientos.map(asiento => ({
+      id_asiento: asiento.id_asiento,
+      fila: asiento.fila,
+      numero: asiento.numero,
+      ocupado: asientosOcupados.has(asiento.id_asiento),
+    }));
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error("Error al consultar mapa de asientos:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
+
 module.exports = {
   enviarBoleto,
   listarBoletosReembolsables,
@@ -412,4 +566,6 @@ module.exports = {
   solicitarReembolso,
   listarBoletosTransferibles,
   transferirBoletos,
+  registrarVenta,
+  mapaAsientos
 };
