@@ -321,7 +321,8 @@ const listarBoletosTransferibles = async (req, res) => {
       seccion: boleto.Asiento?.Zona?.nombre || "",
       fila: boleto.Asiento?.fila || "",
       asiento: boleto.Asiento?.numero || "",
-      id_funcion: boleto.FuncionPrecio?.Funcion?.id_funcion || null, // <-- ¡IMPORTANTE!
+      id_funcion: boleto.FuncionPrecio?.Funcion?.id_funcion || null,
+      id_evento: boleto.FuncionPrecio?.Funcion?.Evento?.id_evento || null,
       precio: Number(boleto.FuncionPrecio?.precio) || 0,
     }));
 
