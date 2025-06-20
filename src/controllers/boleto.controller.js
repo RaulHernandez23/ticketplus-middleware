@@ -21,12 +21,12 @@ const enviarBoleto = async (req, res) => {
   const uid = req.uid;
 
   try {
-    // 1. Buscar el boleto
+    // Buscar el boleto
     const boleto = await Boleto.findOne({ where: { id_boleto } });
     if (!boleto)
       return res.status(404).json({ mensaje: "Boleto no encontrado" });
 
-    // 2. Validar que el boleto pertenece al usuario
+    // Validar que el boleto pertenece al usuario
     console.log(
       "DEBUG - boleto.id_usuario:",
       boleto.id_usuario,
@@ -44,17 +44,17 @@ const enviarBoleto = async (req, res) => {
       console.log("DEBUG - Los IDs son iguales");
     }
 
-    // 3. Validar que el boleto está pagado
+    // Validar que el boleto está pagado
     if (boleto.estado !== "pagado")
       return res.status(409).json({ mensaje: "El boleto no está pagado" });
 
-    // 4. Buscar usuario y validar correo
+    //Buscar usuario y validar correo
     const usuario = await Usuario.findOne({ where: { id_usuario: uid } });
     if (!usuario || !usuario.correo || usuario.estado !== "activo") {
       return res.status(409).json({ mensaje: "Correo de usuario no válido" });
     }
 
-    // 5. Buscar datos del evento correctamente (usando Funcion)
+    // Buscar datos del evento usando Funcion
     const funcionPrecio = await FuncionPrecio.findOne({
       where: { id_funcion_precio: boleto.id_evento_precio },
     });
@@ -75,11 +75,41 @@ const enviarBoleto = async (req, res) => {
     if (!evento) {
       return res.status(404).json({ mensaje: "Evento no encontrado" });
     }
+    const recinto = await require("../models/Recinto").findOne({
+      where: { id_recinto: funcion.id_recinto },
+    });
+    const asiento = await Asiento.findOne({
+      where: { id_asiento: boleto.id_asiento },
+    });
+    const zona = await Zona.findOne({
+      where: { id_zona: asiento.id_zona },
+    });
+    const pago = await Pago.findOne({
+      where: { id_pago: boleto.id_pago },
+    });
+
+    // Armar string del lugar
+    let lugar = "";
+    if (recinto) {
+      lugar = `${recinto.nombre}, ${recinto.calle} ${recinto.numero}, ${recinto.ciudad}`;
+    }
+
+    // Armar objeto detalles
+    const detalles = {
+      seccion: zona?.nombre || "-",
+      fila: asiento?.fila || "-",
+      asiento: asiento?.numero || "-",
+      precio_boleto: Number(funcionPrecio?.precio) || 0,
+      cargos_por_orden: Number(pago?.costo_servicio) || 0,
+      total_devolucion: Number(pago?.monto_total) || 0,
+      lugar, // ahora sí el lugar correcto
+      fecha: funcion?.fecha || "",
+    };
 
     // 6. Generar PDF
     let pdfBuffer;
     try {
-      pdfBuffer = await generarPDF(boleto, usuario, evento);
+      pdfBuffer = await generarPDF(boleto, usuario, evento, detalles);
     } catch (err) {
       return res.status(500).json({
         mensaje: "No se pudo generar tu boleto. Inténtalo de nuevo más tarde.",
