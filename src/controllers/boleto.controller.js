@@ -16,7 +16,6 @@ const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../config/db");
 const { Op } = require("sequelize");
 
-
 const enviarBoleto = async (req, res) => {
   const id_boleto = req.params.id_boleto;
   const uid = req.uid;
@@ -293,7 +292,7 @@ const transferirBoletos = async (req, res) => {
 
   const t = await sequelize.transaction();
   try {
-    //Validar receptor
+    // Buscar usuario destino por correo
     const usuarioDestino = await Usuario.findOne({
       where: { correo: receptor.correo },
       transaction: t,
@@ -306,7 +305,32 @@ const transferirBoletos = async (req, res) => {
       });
     }
 
-    //Validar boletos
+    // Separar apellidos recibidos
+    let apellidoPaterno = "";
+    let apellidoMaterno = "";
+    if (receptor.apellidos) {
+      const partes = receptor.apellidos.trim().split(" ");
+      apellidoPaterno = partes[0] || "";
+      apellidoMaterno = partes.slice(1).join(" ") || "";
+    }
+
+    // Validar nombre y apellidos
+    if (
+      usuarioDestino.nombre.trim().toLowerCase() !==
+        receptor.nombre.trim().toLowerCase() ||
+      usuarioDestino.apellido_paterno.trim().toLowerCase() !==
+        apellidoPaterno.trim().toLowerCase() ||
+      usuarioDestino.apellido_materno.trim().toLowerCase() !==
+        apellidoMaterno.trim().toLowerCase()
+    ) {
+      await t.rollback();
+      return res.status(400).json({
+        mensaje:
+          "Los datos del receptor (nombre y apellidos) no coinciden con el correo proporcionado.",
+      });
+    }
+
+    // Validar boletos originales
     const boletosOriginales = await Boleto.findAll({
       where: {
         id_boleto: boletos,
@@ -323,9 +347,8 @@ const transferirBoletos = async (req, res) => {
         .json({ mensaje: "Uno o más boletos no son válidos para transferir." });
     }
 
-    //Procesar transferencia
+    // Validar que no hayan sido transferidos antes (deben tener estado "pagado" y NO existir en TransferenciaBoleto)
     for (const boleto of boletosOriginales) {
-      // Verifica si ya existe una transferencia para este boleto
       const yaTransferido = await TransferenciaBoleto.findOne({
         where: { id_boleto: boleto.id_boleto },
         transaction: t,
@@ -336,9 +359,21 @@ const transferirBoletos = async (req, res) => {
           mensaje: `El boleto con id ${boleto.id_boleto} ya fue transferido anteriormente.`,
         });
       }
+      if (boleto.estado !== "pagado") {
+        await t.rollback();
+        return res.status(400).json({
+          mensaje: `El boleto con id ${boleto.id_boleto} no está disponible para transferir.`,
+        });
+      }
+    }
+
+    // Procesar transferencia
+    for (const boleto of boletosOriginales) {
+      // Marcar el boleto original como transferido
       boleto.estado = "transferido";
       await boleto.save({ transaction: t });
 
+      // Crear nuevo boleto para el receptor (asegúrate de incluir id_funcion si es requerido)
       const nuevoQR = require("crypto").randomBytes(8).toString("hex");
       const nuevaUrl = `https://qr.com/${nuevoQR}`;
 
@@ -350,6 +385,7 @@ const transferirBoletos = async (req, res) => {
           fecha_compra: new Date(),
           estado: "pagado",
           id_asiento: boleto.id_asiento,
+          id_funcion: boleto.id_funcion, // <-- importante si tu modelo lo requiere
           codigo_qr: nuevoQR,
           url_codigo: nuevaUrl,
         },
@@ -410,7 +446,8 @@ const transferirBoletos = async (req, res) => {
 };
 
 const registrarVenta = async (req, res) => {
-  const { id_funcion, id_zona, id_asiento, id_metodo_pago, codigo_descuento } = req.body;
+  const { id_funcion, id_zona, id_asiento, id_metodo_pago, codigo_descuento } =
+    req.body;
   const uid = req.uid; // Autenticación previa
 
   const t = await sequelize.transaction();
@@ -438,11 +475,13 @@ const registrarVenta = async (req, res) => {
 
     if (!funcionPrecio) {
       await t.rollback();
-      return res.status(404).json({ mensaje: "Precio no disponible para esta función/zona." });
+      return res
+        .status(404)
+        .json({ mensaje: "Precio no disponible para esta función/zona." });
     }
 
     let precio = parseFloat(funcionPrecio.precio);
-    const costo_servicio = 10.00; // Fijo o configurable
+    const costo_servicio = 10.0; // Fijo o configurable
     let descuento = 0;
     let id_descuento = null;
 
@@ -521,7 +560,9 @@ const mapaAsientos = async (req, res) => {
   const { id_funcion, id_zona } = req.query;
 
   if (!id_funcion || !id_zona) {
-    return res.status(400).json({ mensaje: "id_funcion y id_zona son requeridos" });
+    return res
+      .status(400)
+      .json({ mensaje: "id_funcion y id_zona son requeridos" });
   }
 
   try {
@@ -529,7 +570,10 @@ const mapaAsientos = async (req, res) => {
     const asientos = await Asiento.findAll({
       where: { id_zona },
       include: [{ model: Zona }],
-      order: [["fila", "ASC"], ["numero", "ASC"]],
+      order: [
+        ["fila", "ASC"],
+        ["numero", "ASC"],
+      ],
     });
 
     // 2. Obtener boletos ocupados para esa función
@@ -541,10 +585,10 @@ const mapaAsientos = async (req, res) => {
       attributes: ["id_asiento"],
     });
 
-    const asientosOcupados = new Set(boletosOcupados.map(b => b.id_asiento));
+    const asientosOcupados = new Set(boletosOcupados.map((b) => b.id_asiento));
 
     // 3. Armar estructura de mapa
-    const resultado = asientos.map(asiento => ({
+    const resultado = asientos.map((asiento) => ({
       id_asiento: asiento.id_asiento,
       fila: asiento.fila,
       numero: asiento.numero,
@@ -558,7 +602,6 @@ const mapaAsientos = async (req, res) => {
   }
 };
 
-
 module.exports = {
   enviarBoleto,
   listarBoletosReembolsables,
@@ -567,5 +610,5 @@ module.exports = {
   listarBoletosTransferibles,
   transferirBoletos,
   registrarVenta,
-  mapaAsientos
+  mapaAsientos,
 };
