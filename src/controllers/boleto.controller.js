@@ -314,11 +314,13 @@ const listarBoletosTransferibles = async (req, res) => {
     const resultado = boletos.map((boleto) => ({
       id_boleto: boleto.id_boleto,
       evento: boleto.FuncionPrecio?.Funcion?.Evento?.titulo || "",
+      fecha: boleto.FuncionPrecio?.Funcion?.fecha || "",
       seccion: boleto.Asiento?.Zona?.nombre || "",
       fila: boleto.Asiento?.fila || "",
       asiento: boleto.Asiento?.numero || "",
+      id_funcion: boleto.id_funcion,
+      precio: Number(boleto.FuncionPrecio?.precio) || 0,
     }));
-
     return res.json(resultado);
   } catch (error) {
     console.error(error);
@@ -789,6 +791,121 @@ const obtenerEventoDeFuncion = async (req, res) => {
   }
 };
 
+const descargarBoletoPDF = async (req, res) => {
+  const uid = req.uid;
+  const id_boleto = req.params.id_boleto;
+
+  try {
+    // Busca el boleto y valida que sea del usuario
+    const boleto = await Boleto.findOne({
+      where: { id_boleto, id_usuario: uid },
+      include: [
+        {
+          model: FuncionPrecio,
+          include: [
+            {
+              model: Funcion,
+              include: [{ model: Evento }],
+            },
+            {
+              model: Zona,
+            },
+          ],
+        },
+        {
+          model: Asiento,
+          include: [{ model: Zona }],
+        },
+        {
+          model: Pago,
+        },
+      ],
+    });
+
+    console.log("Descargar PDF: id_boleto:", id_boleto, "uid:", uid);
+
+    if (!boleto) {
+      console.error(
+        "No se encontró el boleto con id:",
+        id_boleto,
+        "para el usuario:",
+        uid
+      );
+      return res.status(404).json({ mensaje: "Boleto no encontrado" });
+    }
+
+    // Datos del usuario
+    const usuario = await Usuario.findByPk(uid);
+
+    // Datos del evento
+    const evento = boleto.FuncionPrecio?.Funcion?.Evento;
+
+    // Detalles para el PDF
+    const funcion = boleto.FuncionPrecio?.Funcion;
+    const zona = boleto.Asiento?.Zona || boleto.FuncionPrecio?.Zona;
+    const asiento = boleto.Asiento;
+    const pago = boleto.Pago;
+
+    // Si el campo 'lugar' no existe en la función, lo armamos con el recinto
+    let lugar = funcion?.lugar || "";
+    if (!lugar && funcion?.id_recinto) {
+      try {
+        const recinto = await require("../models/Recinto").findOne({
+          where: { id_recinto: funcion.id_recinto },
+        });
+        if (recinto) {
+          lugar = `${recinto.nombre}, ${recinto.calle} ${recinto.numero}, ${recinto.ciudad}`;
+        }
+      } catch (err) {
+        console.error("Error obteniendo recinto:", err);
+      }
+    }
+
+    const detalles = {
+      seccion: zona?.nombre || "-",
+      fila: asiento?.fila || "-",
+      asiento: asiento?.numero || "-",
+      precio_boleto: Number(boleto.FuncionPrecio?.precio) || 0,
+      cargos_por_orden: Number(pago?.costo_servicio) || 0,
+      total_devolucion: Number(pago?.monto_total) || 0,
+      lugar,
+      fecha: funcion?.fecha || "",
+    };
+
+    // Validar que todos los datos requeridos existen
+    if (!usuario || !evento || !funcion || !asiento || !zona || !pago) {
+      console.error("Faltan datos requeridos para generar el PDF del boleto");
+      return res.status(500).json({
+        mensaje: "Faltan datos requeridos para generar el PDF del boleto",
+      });
+    }
+
+    // Generar PDF
+    let pdfBuffer;
+    try {
+      pdfBuffer = await generarPDF(boleto, usuario, evento, detalles);
+      if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer)) {
+        throw new Error("No se generó un buffer válido para el PDF");
+      }
+    } catch (err) {
+      console.error("Error al generar el PDF:", err);
+      return res.status(500).json({
+        mensaje: "No se pudo generar tu boleto. Inténtalo de nuevo más tarde.",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=boleto_${id_boleto}.pdf`
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Error al descargar PDF:", error);
+    res.status(500).json({ mensaje: "Error al generar el PDF del boleto" });
+  }
+};
+
 module.exports = {
   enviarBoleto,
   listarBoletosReembolsables,
@@ -803,4 +920,5 @@ module.exports = {
   obtenerMetodosPago,
   obtenerEventoDeFuncion,
   mapaAsientos,
+  descargarBoletoPDF,
 };

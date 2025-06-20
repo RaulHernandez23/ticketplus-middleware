@@ -14,6 +14,7 @@ const {
   obtenerBoletosDeFuncion,
   obtenerMetodosPago,
   obtenerEventoDeFuncion,
+  descargarBoletoPDF,
 } = require("../controllers/boleto.controller");
 
 router.post("/:id_boleto/enviar", validarToken, enviarBoleto);
@@ -28,5 +29,6 @@ router.get("/mapa", mapaAsientos);
 router.get("/pagados/:id_funcion", obtenerBoletosDeFuncion);
 router.get("/metodos-pago/:id_usuario", validarToken, obtenerMetodosPago);
 router.get("/evento/:id_funcion", obtenerEventoDeFuncion);
+router.get("/:id_boleto/descargar-pdf", validarToken, descargarBoletoPDF);
 
 module.exports = router;
