@@ -267,6 +267,10 @@ const solicitarReembolso = async (req, res) => {
       estado: "pendiente",
     });
 
+    // Cambiar el estado del boleto a "reembolsado"
+    boleto.estado = "reembolsado";
+    await boleto.save();
+
     return res
       .status(200)
       .json({ mensaje: "Solicitud de reembolso registrada" });
