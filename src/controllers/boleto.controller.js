@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 const Usuario = require("../models/Usuario");
 const Boleto = require("../models/Boleto");
 const Evento = require("../models/Evento");
@@ -11,7 +14,10 @@ const Pago = require("../models/Pago");
 const SolicitudReembolso = require("../models/SolicitudReembolso");
 const TransferenciaBoleto = require("../models/TransferenciaBoleto");
 const crypto = require("crypto");
-const Descuento = require("../models/Descuento"); // Asegúrate de tener este modelo
+const Descuento = require("../models/Descuento");
+const MetodoPago = require("../models/MetodoPago");
+const Tarjeta = require("../models/Tarjeta");
+const Paypal = require("../models/Paypal");
 const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../config/db");
 const { Op } = require("sequelize");
@@ -21,12 +27,12 @@ const enviarBoleto = async (req, res) => {
   const uid = req.uid;
 
   try {
-    // 1. Buscar el boleto
+    // Buscar el boleto
     const boleto = await Boleto.findOne({ where: { id_boleto } });
     if (!boleto)
       return res.status(404).json({ mensaje: "Boleto no encontrado" });
 
-    // 2. Validar que el boleto pertenece al usuario
+    // Validar que el boleto pertenece al usuario
     console.log(
       "DEBUG - boleto.id_usuario:",
       boleto.id_usuario,
@@ -44,17 +50,17 @@ const enviarBoleto = async (req, res) => {
       console.log("DEBUG - Los IDs son iguales");
     }
 
-    // 3. Validar que el boleto está pagado
+    // Validar que el boleto está pagado
     if (boleto.estado !== "pagado")
       return res.status(409).json({ mensaje: "El boleto no está pagado" });
 
-    // 4. Buscar usuario y validar correo
+    //Buscar usuario y validar correo
     const usuario = await Usuario.findOne({ where: { id_usuario: uid } });
     if (!usuario || !usuario.correo || usuario.estado !== "activo") {
       return res.status(409).json({ mensaje: "Correo de usuario no válido" });
     }
 
-    // 5. Buscar datos del evento correctamente (usando Funcion)
+    // Buscar datos del evento usando Funcion
     const funcionPrecio = await FuncionPrecio.findOne({
       where: { id_funcion_precio: boleto.id_evento_precio },
     });
@@ -75,11 +81,41 @@ const enviarBoleto = async (req, res) => {
     if (!evento) {
       return res.status(404).json({ mensaje: "Evento no encontrado" });
     }
+    const recinto = await require("../models/Recinto").findOne({
+      where: { id_recinto: funcion.id_recinto },
+    });
+    const asiento = await Asiento.findOne({
+      where: { id_asiento: boleto.id_asiento },
+    });
+    const zona = await Zona.findOne({
+      where: { id_zona: asiento.id_zona },
+    });
+    const pago = await Pago.findOne({
+      where: { id_pago: boleto.id_pago },
+    });
+
+    // Armar string del lugar
+    let lugar = "";
+    if (recinto) {
+      lugar = `${recinto.nombre}, ${recinto.calle} ${recinto.numero}, ${recinto.ciudad}`;
+    }
+
+    // Armar objeto detalles
+    const detalles = {
+      seccion: zona?.nombre || "-",
+      fila: asiento?.fila || "-",
+      asiento: asiento?.numero || "-",
+      precio_boleto: Number(funcionPrecio?.precio) || 0,
+      cargos_por_orden: Number(pago?.costo_servicio) || 0,
+      total_devolucion: Number(pago?.monto_total) || 0,
+      lugar, // ahora sí el lugar correcto
+      fecha: funcion?.fecha || "",
+    };
 
     // 6. Generar PDF
     let pdfBuffer;
     try {
-      pdfBuffer = await generarPDF(boleto, usuario, evento);
+      pdfBuffer = await generarPDF(boleto, usuario, evento, detalles);
     } catch (err) {
       return res.status(500).json({
         mensaje: "No se pudo generar tu boleto. Inténtalo de nuevo más tarde.",
@@ -236,6 +272,10 @@ const solicitarReembolso = async (req, res) => {
       motivo: motivoCompleto,
       estado: "pendiente",
     });
+
+    // Cambiar el estado del boleto a "reembolsado"
+    boleto.estado = "reembolsado";
+    await boleto.save();
 
     return res
       .status(200)
@@ -556,6 +596,37 @@ const registrarVenta = async (req, res) => {
   }
 };
 
+const obtenerZonasDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  if (!id_funcion) {
+    return res.status(400).json({ mensaje: "id_funcion es requerido" });
+  }
+
+  try {
+    const funcionPrecios = await FuncionPrecio.findAll({
+      where: { id_funcion },
+      include: [{ model: Zona }],
+      order: [["precio", "DESC"]],
+    });
+
+    if (funcionPrecios.length === 0) {
+      return res.status(404).json({ mensaje: "No se encontraron zonas" });
+    }
+
+    const zonas = funcionPrecios.map((fp) => ({
+      id_zona: fp.id_zona,
+      nombre_zona: fp.Zona.nombre,
+      precio: fp.precio,
+      id_funcion_precio: fp.id_funcion_precio,
+    }));
+
+    return res.status(200).json(zonas);
+  } catch (error) {
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
 const mapaAsientos = async (req, res) => {
   const { id_funcion, id_zona } = req.query;
 
@@ -602,6 +673,122 @@ const mapaAsientos = async (req, res) => {
   }
 };
 
+const obtenerBoletosDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  try {
+    const boletos = await Boleto.findAll({
+      where: { id_funcion, estado: "pagado" },
+      include: [
+        {
+          model: Asiento,
+          include: [{ model: Zona }],
+        },
+      ],
+    });
+
+    return res.status(200).json(boletos);
+  } catch (error) {
+    console.error("Error al obtener boletos de la función:", error);
+    throw new Error("Error al obtener boletos de la función");
+  }
+};
+
+const obtenerMetodosPago = async (req, res) => {
+  const { id_usuario } = req.params;
+
+  try {
+    const metodosPago = await MetodoPago.findAll({
+      where: { id_usuario },
+      attributes: ["id_metodo_pago", "alias", "tipo_metodo", "estado"],
+    });
+
+    if (metodosPago.length === 0) {
+      return res
+        .status(404)
+        .json({ mensaje: "No se encontraron métodos de pago" });
+    }
+
+    const metodosConTarjeta = metodosPago.filter(
+      (metodo) => metodo.tipo_metodo === "tarjeta"
+    );
+
+    const metodosConPaypal = metodosPago.filter(
+      (metodo) => metodo.tipo_metodo === "paypal"
+    );
+
+    const tarjetas = await Tarjeta.findAll({
+      where: {
+        id_metodo_pago: metodosConTarjeta.map((m) => m.id_metodo_pago),
+      },
+      attributes: [
+        "id_metodo_pago",
+        "numero_tarjeta_cifrado",
+        "titular_tarjeta",
+        "vencimiento_mes",
+        "vencimiento_ano",
+        "ultimos_cuatro",
+      ],
+      raw: true,
+    });
+
+    return res.status(200).json(tarjetas);
+  } catch (error) {
+    console.error("Error al obtener métodos de pago:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
+const obtenerEventoDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  try {
+    const funcion = await Funcion.findByPk(id_funcion, {
+      include: [
+        {
+          model: Evento,
+          attributes: ["id_evento", "titulo", "descripcion", "banner_url"],
+        },
+      ],
+    });
+    if (!funcion) {
+      return res.status(404).json({ mensaje: "Función no encontrada" });
+    }
+    const evento = funcion.Evento;
+    if (!evento) {
+      return res.status(404).json({ mensaje: "Evento no encontrado" });
+    }
+
+    let banner_base64 = null;
+    try {
+      const rutaBanner = path.join(
+        __dirname,
+        "..",
+        "..",
+        "public",
+        "eventBanners",
+        evento.banner_url
+      );
+      const ext = path.extname(evento.banner_url).slice(1);
+      const imagen = fs.readFileSync(rutaBanner);
+      banner_base64 = `data:image/${ext};base64,${imagen.toString("base64")}`;
+    } catch (err) {
+      console.error("Error al cargar la imagen del banner:", err);
+    }
+
+    return res.status(200).json({
+      id_evento: evento.id_evento,
+      titulo: evento.titulo,
+      descripcion: evento.descripcion,
+      banner_url: evento.banner_url,
+      banner_base64,
+    });
+  } catch (error) {
+    console.error("Error al obtener evento de función:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
 module.exports = {
   enviarBoleto,
   listarBoletosReembolsables,
@@ -610,5 +797,10 @@ module.exports = {
   listarBoletosTransferibles,
   transferirBoletos,
   registrarVenta,
+  obtenerZonasDeFuncion,
+  mapaAsientos,
+  obtenerBoletosDeFuncion,
+  obtenerMetodosPago,
+  obtenerEventoDeFuncion,
   mapaAsientos,
 };

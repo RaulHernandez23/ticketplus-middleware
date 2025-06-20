@@ -9,8 +9,13 @@ const {
   listarBoletosTransferibles,
   transferirBoletos,
   registrarVenta,
-  mapaAsientos
+  obtenerZonasDeFuncion,
+  mapaAsientos,
+  obtenerBoletosDeFuncion,
+  obtenerMetodosPago,
+  obtenerEventoDeFuncion,
 } = require("../controllers/boleto.controller");
+const { crearMetodoPago } = require("../controllers/metodoPago.controller");
 
 router.post("/:id_boleto/enviar", validarToken, enviarBoleto);
 router.get("/reembolsables", validarToken, listarBoletosReembolsables);
@@ -19,6 +24,12 @@ router.post("/:id_boleto/reembolso", validarToken, solicitarReembolso);
 router.get("/transferibles", validarToken, listarBoletosTransferibles);
 router.post("/transferir", validarToken, transferirBoletos);
 router.post("/registrar-venta", validarToken, registrarVenta);
+router.get("/zonas/:id_funcion", obtenerZonasDeFuncion);
 router.get("/mapa", mapaAsientos);
+router.get("/pagados/:id_funcion", obtenerBoletosDeFuncion);
+router.get("/metodos-pago/:id_usuario", validarToken, obtenerMetodosPago);
+router.post("/metodos-pago/registrar", validarToken, crearMetodoPago);
+
+router.get("/evento/:id_funcion", obtenerEventoDeFuncion);
 
 module.exports = router;
