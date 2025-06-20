@@ -591,6 +591,19 @@ const registrarVenta = async (req, res) => {
     await pago.update({ estado: "completado" }, { transaction: t });
 
     await t.commit();
+
+    try {
+      const fakeReq = { params: { id_boleto: boleto.id_boleto }, uid };
+
+      const fakeRes = {
+        status: () => fakeRes,
+        json: () => {},
+      };
+      enviarBoleto(fakeReq, fakeRes);
+    } catch (err) {
+      console.error("Error enviando el boleto por correo tras la venta:", err);
+    }
+
     return res.status(201).json({
       mensaje: "Boleto vendido exitosamente.",
       id_boleto: boleto.id_boleto,
