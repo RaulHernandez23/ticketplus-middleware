@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+
 const Usuario = require("../models/Usuario");
 const Boleto = require("../models/Boleto");
 const Evento = require("../models/Evento");
@@ -11,11 +14,13 @@ const Pago = require("../models/Pago");
 const SolicitudReembolso = require("../models/SolicitudReembolso");
 const TransferenciaBoleto = require("../models/TransferenciaBoleto");
 const crypto = require("crypto");
-const Descuento = require("../models/Descuento"); // Asegúrate de tener este modelo
+const Descuento = require("../models/Descuento");
+const MetodoPago = require("../models/MetodoPago");
+const Tarjeta = require("../models/Tarjeta");
+const Paypal = require("../models/Paypal");
 const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../config/db");
 const { Op } = require("sequelize");
-
 
 const enviarBoleto = async (req, res) => {
   const id_boleto = req.params.id_boleto;
@@ -410,7 +415,8 @@ const transferirBoletos = async (req, res) => {
 };
 
 const registrarVenta = async (req, res) => {
-  const { id_funcion, id_zona, id_asiento, id_metodo_pago, codigo_descuento } = req.body;
+  const { id_funcion, id_zona, id_asiento, id_metodo_pago, codigo_descuento } =
+    req.body;
   const uid = req.uid; // Autenticación previa
 
   const t = await sequelize.transaction();
@@ -438,11 +444,13 @@ const registrarVenta = async (req, res) => {
 
     if (!funcionPrecio) {
       await t.rollback();
-      return res.status(404).json({ mensaje: "Precio no disponible para esta función/zona." });
+      return res
+        .status(404)
+        .json({ mensaje: "Precio no disponible para esta función/zona." });
     }
 
     let precio = parseFloat(funcionPrecio.precio);
-    const costo_servicio = 10.00; // Fijo o configurable
+    const costo_servicio = 10.0; // Fijo o configurable
     let descuento = 0;
     let id_descuento = null;
 
@@ -517,11 +525,44 @@ const registrarVenta = async (req, res) => {
   }
 };
 
+const obtenerZonasDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  if (!id_funcion) {
+    return res.status(400).json({ mensaje: "id_funcion es requerido" });
+  }
+
+  try {
+    const funcionPrecios = await FuncionPrecio.findAll({
+      where: { id_funcion },
+      include: [{ model: Zona }],
+      order: [["precio", "DESC"]],
+    });
+
+    if (funcionPrecios.length === 0) {
+      return res.status(404).json({ mensaje: "No se encontraron zonas" });
+    }
+
+    const zonas = funcionPrecios.map((fp) => ({
+      id_zona: fp.id_zona,
+      nombre_zona: fp.Zona.nombre,
+      precio: fp.precio,
+      id_funcion_precio: fp.id_funcion_precio,
+    }));
+
+    return res.status(200).json(zonas);
+  } catch (error) {
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
 const mapaAsientos = async (req, res) => {
   const { id_funcion, id_zona } = req.query;
 
   if (!id_funcion || !id_zona) {
-    return res.status(400).json({ mensaje: "id_funcion y id_zona son requeridos" });
+    return res
+      .status(400)
+      .json({ mensaje: "id_funcion y id_zona son requeridos" });
   }
 
   try {
@@ -529,7 +570,10 @@ const mapaAsientos = async (req, res) => {
     const asientos = await Asiento.findAll({
       where: { id_zona },
       include: [{ model: Zona }],
-      order: [["fila", "ASC"], ["numero", "ASC"]],
+      order: [
+        ["fila", "ASC"],
+        ["numero", "ASC"],
+      ],
     });
 
     // 2. Obtener boletos ocupados para esa función
@@ -541,10 +585,10 @@ const mapaAsientos = async (req, res) => {
       attributes: ["id_asiento"],
     });
 
-    const asientosOcupados = new Set(boletosOcupados.map(b => b.id_asiento));
+    const asientosOcupados = new Set(boletosOcupados.map((b) => b.id_asiento));
 
     // 3. Armar estructura de mapa
-    const resultado = asientos.map(asiento => ({
+    const resultado = asientos.map((asiento) => ({
       id_asiento: asiento.id_asiento,
       fila: asiento.fila,
       numero: asiento.numero,
@@ -558,6 +602,121 @@ const mapaAsientos = async (req, res) => {
   }
 };
 
+const obtenerBoletosDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  try {
+    const boletos = await Boleto.findAll({
+      where: { id_funcion, estado: "pagado" },
+      include: [
+        {
+          model: Asiento,
+          include: [{ model: Zona }],
+        },
+      ],
+    });
+
+    return res.status(200).json(boletos);
+  } catch (error) {
+    console.error("Error al obtener boletos de la función:", error);
+    throw new Error("Error al obtener boletos de la función");
+  }
+};
+
+const obtenerMetodosPago = async (req, res) => {
+  const { id_usuario } = req.params;
+
+  try {
+    const metodosPago = await MetodoPago.findAll({
+      where: { id_usuario },
+      attributes: ["id_metodo_pago", "alias", "tipo_metodo", "estado"],
+    });
+
+    if (metodosPago.length === 0) {
+      return res
+        .status(404)
+        .json({ mensaje: "No se encontraron métodos de pago" });
+    }
+
+    const metodosConTarjeta = metodosPago.filter(
+      (metodo) => metodo.tipo_metodo === "tarjeta"
+    );
+
+    const metodosConPaypal = metodosPago.filter(
+      (metodo) => metodo.tipo_metodo === "paypal"
+    );
+
+    const tarjetas = await Tarjeta.findAll({
+      where: {
+        id_metodo_pago: metodosConTarjeta.map((m) => m.id_metodo_pago),
+      },
+      attributes: [
+        "id_metodo_pago",
+        "numero_tarjeta_cifrado",
+        "titular_tarjeta",
+        "vencimiento_mes",
+        "vencimiento_ano",
+        "ultimos_cuatro",
+      ],
+      raw: true,
+    });
+
+    return res.status(200).json(tarjetas);
+  } catch (error) {
+    console.error("Error al obtener métodos de pago:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
+
+const obtenerEventoDeFuncion = async (req, res) => {
+  const { id_funcion } = req.params;
+
+  try {
+    const funcion = await Funcion.findByPk(id_funcion, {
+      include: [
+        {
+          model: Evento,
+          attributes: ["id_evento", "titulo", "descripcion", "banner_url"],
+        },
+      ],
+    });
+    if (!funcion) {
+      return res.status(404).json({ mensaje: "Función no encontrada" });
+    }
+    const evento = funcion.Evento;
+    if (!evento) {
+      return res.status(404).json({ mensaje: "Evento no encontrado" });
+    }
+
+    let banner_base64 = null;
+    try {
+      const rutaBanner = path.join(
+        __dirname,
+        "..",
+        "..",
+        "public",
+        "eventBanners",
+        evento.banner_url
+      );
+      const ext = path.extname(evento.banner_url).slice(1);
+      const imagen = fs.readFileSync(rutaBanner);
+      banner_base64 = `data:image/${ext};base64,${imagen.toString("base64")}`;
+    } catch (err) {
+      console.error("Error al cargar la imagen del banner:", err);
+    }
+
+    return res.status(200).json({
+      id_evento: evento.id_evento,
+      titulo: evento.titulo,
+      descripcion: evento.descripcion,
+      banner_url: evento.banner_url,
+      banner_base64,
+    });
+  } catch (error) {
+    console.error("Error al obtener evento de función:", error);
+    return res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+};
 
 module.exports = {
   enviarBoleto,
@@ -567,5 +726,9 @@ module.exports = {
   listarBoletosTransferibles,
   transferirBoletos,
   registrarVenta,
-  mapaAsientos
+  obtenerZonasDeFuncion,
+  mapaAsientos,
+  obtenerBoletosDeFuncion,
+  obtenerMetodosPago,
+  obtenerEventoDeFuncion,
 };
