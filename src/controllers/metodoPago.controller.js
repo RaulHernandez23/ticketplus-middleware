@@ -1,3 +1,6 @@
+// importaciones necesarias
+const bcrypt = require("bcrypt");
+
 const MetodoPago = require("../models/MetodoPago");
 const Tarjeta = require("../models/Tarjeta");
 const Paypal = require("../models/Paypal");
