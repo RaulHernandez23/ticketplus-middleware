@@ -27,12 +27,12 @@ const enviarBoleto = async (req, res) => {
   const uid = req.uid;
 
   try {
-    // 1. Buscar el boleto
+    // Buscar el boleto
     const boleto = await Boleto.findOne({ where: { id_boleto } });
     if (!boleto)
       return res.status(404).json({ mensaje: "Boleto no encontrado" });
 
-    // 2. Validar que el boleto pertenece al usuario
+    // Validar que el boleto pertenece al usuario
     console.log(
       "DEBUG - boleto.id_usuario:",
       boleto.id_usuario,
@@ -50,17 +50,17 @@ const enviarBoleto = async (req, res) => {
       console.log("DEBUG - Los IDs son iguales");
     }
 
-    // 3. Validar que el boleto está pagado
+    // Validar que el boleto está pagado
     if (boleto.estado !== "pagado")
       return res.status(409).json({ mensaje: "El boleto no está pagado" });
 
-    // 4. Buscar usuario y validar correo
+    //Buscar usuario y validar correo
     const usuario = await Usuario.findOne({ where: { id_usuario: uid } });
     if (!usuario || !usuario.correo || usuario.estado !== "activo") {
       return res.status(409).json({ mensaje: "Correo de usuario no válido" });
     }
 
-    // 5. Buscar datos del evento correctamente (usando Funcion)
+    // Buscar datos del evento usando Funcion
     const funcionPrecio = await FuncionPrecio.findOne({
       where: { id_funcion_precio: boleto.id_evento_precio },
     });
@@ -81,11 +81,41 @@ const enviarBoleto = async (req, res) => {
     if (!evento) {
       return res.status(404).json({ mensaje: "Evento no encontrado" });
     }
+    const recinto = await require("../models/Recinto").findOne({
+      where: { id_recinto: funcion.id_recinto },
+    });
+    const asiento = await Asiento.findOne({
+      where: { id_asiento: boleto.id_asiento },
+    });
+    const zona = await Zona.findOne({
+      where: { id_zona: asiento.id_zona },
+    });
+    const pago = await Pago.findOne({
+      where: { id_pago: boleto.id_pago },
+    });
+
+    // Armar string del lugar
+    let lugar = "";
+    if (recinto) {
+      lugar = `${recinto.nombre}, ${recinto.calle} ${recinto.numero}, ${recinto.ciudad}`;
+    }
+
+    // Armar objeto detalles
+    const detalles = {
+      seccion: zona?.nombre || "-",
+      fila: asiento?.fila || "-",
+      asiento: asiento?.numero || "-",
+      precio_boleto: Number(funcionPrecio?.precio) || 0,
+      cargos_por_orden: Number(pago?.costo_servicio) || 0,
+      total_devolucion: Number(pago?.monto_total) || 0,
+      lugar, // ahora sí el lugar correcto
+      fecha: funcion?.fecha || "",
+    };
 
     // 6. Generar PDF
     let pdfBuffer;
     try {
-      pdfBuffer = await generarPDF(boleto, usuario, evento);
+      pdfBuffer = await generarPDF(boleto, usuario, evento, detalles);
     } catch (err) {
       return res.status(500).json({
         mensaje: "No se pudo generar tu boleto. Inténtalo de nuevo más tarde.",
@@ -298,7 +328,7 @@ const transferirBoletos = async (req, res) => {
 
   const t = await sequelize.transaction();
   try {
-    //Validar receptor
+    // Buscar usuario destino por correo
     const usuarioDestino = await Usuario.findOne({
       where: { correo: receptor.correo },
       transaction: t,
@@ -311,7 +341,32 @@ const transferirBoletos = async (req, res) => {
       });
     }
 
-    //Validar boletos
+    // Separar apellidos recibidos
+    let apellidoPaterno = "";
+    let apellidoMaterno = "";
+    if (receptor.apellidos) {
+      const partes = receptor.apellidos.trim().split(" ");
+      apellidoPaterno = partes[0] || "";
+      apellidoMaterno = partes.slice(1).join(" ") || "";
+    }
+
+    // Validar nombre y apellidos
+    if (
+      usuarioDestino.nombre.trim().toLowerCase() !==
+        receptor.nombre.trim().toLowerCase() ||
+      usuarioDestino.apellido_paterno.trim().toLowerCase() !==
+        apellidoPaterno.trim().toLowerCase() ||
+      usuarioDestino.apellido_materno.trim().toLowerCase() !==
+        apellidoMaterno.trim().toLowerCase()
+    ) {
+      await t.rollback();
+      return res.status(400).json({
+        mensaje:
+          "Los datos del receptor (nombre y apellidos) no coinciden con el correo proporcionado.",
+      });
+    }
+
+    // Validar boletos originales
     const boletosOriginales = await Boleto.findAll({
       where: {
         id_boleto: boletos,
@@ -328,9 +383,8 @@ const transferirBoletos = async (req, res) => {
         .json({ mensaje: "Uno o más boletos no son válidos para transferir." });
     }
 
-    //Procesar transferencia
+    // Validar que no hayan sido transferidos antes (deben tener estado "pagado" y NO existir en TransferenciaBoleto)
     for (const boleto of boletosOriginales) {
-      // Verifica si ya existe una transferencia para este boleto
       const yaTransferido = await TransferenciaBoleto.findOne({
         where: { id_boleto: boleto.id_boleto },
         transaction: t,
@@ -341,9 +395,21 @@ const transferirBoletos = async (req, res) => {
           mensaje: `El boleto con id ${boleto.id_boleto} ya fue transferido anteriormente.`,
         });
       }
+      if (boleto.estado !== "pagado") {
+        await t.rollback();
+        return res.status(400).json({
+          mensaje: `El boleto con id ${boleto.id_boleto} no está disponible para transferir.`,
+        });
+      }
+    }
+
+    // Procesar transferencia
+    for (const boleto of boletosOriginales) {
+      // Marcar el boleto original como transferido
       boleto.estado = "transferido";
       await boleto.save({ transaction: t });
 
+      // Crear nuevo boleto para el receptor (asegúrate de incluir id_funcion si es requerido)
       const nuevoQR = require("crypto").randomBytes(8).toString("hex");
       const nuevaUrl = `https://qr.com/${nuevoQR}`;
 
@@ -355,6 +421,7 @@ const transferirBoletos = async (req, res) => {
           fecha_compra: new Date(),
           estado: "pagado",
           id_asiento: boleto.id_asiento,
+          id_funcion: boleto.id_funcion, // <-- importante si tu modelo lo requiere
           codigo_qr: nuevoQR,
           url_codigo: nuevaUrl,
         },
@@ -731,4 +798,5 @@ module.exports = {
   obtenerBoletosDeFuncion,
   obtenerMetodosPago,
   obtenerEventoDeFuncion,
+  mapaAsientos,
 };
