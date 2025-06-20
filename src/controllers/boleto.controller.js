@@ -178,6 +178,8 @@ const listarBoletosReembolsables = async (req, res) => {
       seccion: boleto.Asiento?.Zona?.nombre || "",
       fila: boleto.Asiento?.fila || "",
       asiento: boleto.Asiento?.numero || "",
+      id_funcion: boleto.FuncionPrecio?.Funcion?.id_funcion || null, // <-- ¡esto es clave!
+      precio: Number(boleto.FuncionPrecio?.precio) || 0,
     }));
 
     return res.json(resultado);
@@ -299,14 +301,15 @@ const listarBoletosTransferibles = async (req, res) => {
               model: Funcion,
               include: [{ model: Evento }],
             },
-            {
-              model: Zona,
-            },
+            { model: Zona },
           ],
         },
         {
           model: Asiento,
           include: [{ model: Zona }],
+        },
+        {
+          model: Pago,
         },
       ],
     });
@@ -314,9 +317,12 @@ const listarBoletosTransferibles = async (req, res) => {
     const resultado = boletos.map((boleto) => ({
       id_boleto: boleto.id_boleto,
       evento: boleto.FuncionPrecio?.Funcion?.Evento?.titulo || "",
+      fecha: boleto.FuncionPrecio?.Funcion?.fecha || "",
       seccion: boleto.Asiento?.Zona?.nombre || "",
       fila: boleto.Asiento?.fila || "",
       asiento: boleto.Asiento?.numero || "",
+      id_funcion: boleto.FuncionPrecio?.Funcion?.id_funcion || null, // <-- ¡IMPORTANTE!
+      precio: Number(boleto.FuncionPrecio?.precio) || 0,
     }));
 
     return res.json(resultado);
