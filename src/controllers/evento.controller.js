@@ -3,10 +3,12 @@ const path = require("path");
 const { Evento, Funcion, Recinto } = require("../models/Asociaciones");
 const Favorito = require("../models/EventoFavorito");
 const ValoracionEvento = require("../models/ValoracionEvento");
+const FuncionPrecio = require("../models/FuncionPrecio");
+const Zona = require("../models/Zona");
 
 const obtenerEventos = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = parseInt(req.query.limit) || 15;
     const offset = parseInt(req.query.offset) || 0;
 
     const eventos = await Evento.findAll({
@@ -190,6 +192,32 @@ const verificarValoracion = async (req, res) => {
   }
 };
 
+const obtenerZonasConPrecios = async (req, res) => {
+  const { id_evento } = req.params;
+
+  try {
+    const funcion = await Funcion.findOne({ where: { id_evento } });
+    if (!funcion) {
+      return res.status(404).json({ error: "Función no encontrada para este evento" });
+    }
+
+    const precios = await FuncionPrecio.findAll({
+      where: { id_funcion: funcion.id_funcion },
+      include: [{ model: Zona }]
+    });
+
+    const resultado = precios.map(fp => ({
+      tipo: fp.Zona.nombre,
+      precio: `$${fp.precio.toLocaleString("es-MX")}`
+    }));
+
+    return res.status(200).json(resultado);
+  } catch (error) {
+    console.error("Error al obtener zonas y precios:", error);
+    return res.status(500).json({ error: "Error al obtener zonas y precios" });
+  }
+};
+
 module.exports = {
   obtenerEventos,
   obtenerDetallesEvento,
@@ -198,4 +226,5 @@ module.exports = {
   obtenerEventosFavoritos,
   crearValoracion,
   verificarValoracion,
+  obtenerZonasConPrecios,
 };
