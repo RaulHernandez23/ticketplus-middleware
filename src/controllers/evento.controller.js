@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { Evento, Funcion, Recinto } = require("../models/Asociaciones");
 const Favorito = require("../models/EventoFavorito");
+const ValoracionEvento = require("../models/ValoracionEvento");
 
 const obtenerEventos = async (req, res) => {
   try {
@@ -148,10 +149,53 @@ const obtenerEventosFavoritos = async (req, res) => {
   }
 };
 
+const crearValoracion = async (req, res) => {
+  const { id_usuario, id_evento, calificacion, comentario } = req.body;
+
+  if (!id_usuario || !id_evento || !calificacion) {
+    return res.status(400).json({ error: "Faltan datos obligatorios" });
+  }
+
+  try {
+    await ValoracionEvento.create({
+      id_usuario,
+      id_evento,
+      calificacion,
+      comentario
+    });
+
+    return res.status(201).json({ mensaje: "Valoración creada correctamente" });
+  } catch (error) {
+    console.error("Error al guardar valoración:", error);
+    return res.status(500).json({ error: "No se pudo guardar la valoración" });
+  }
+};
+
+const verificarValoracion = async (req, res) => {
+  const { id_evento, id_usuario } = req.params;
+
+  try {
+    const valoracion = await ValoracionEvento.findOne({
+      where: { id_evento, id_usuario },
+    });
+
+    if (valoracion) {
+      return res.status(200).json({ valorado: true });
+    }
+
+    return res.status(200).json({ valorado: false });
+  } catch (error) {
+    console.error("Error al verificar valoración:", error);
+    return res.status(500).json({ error: "Error al verificar valoración" });
+  }
+};
+
 module.exports = {
   obtenerEventos,
   obtenerDetallesEvento,
   agregarEventoFavorito,
   eliminarEventoFavorito,
   obtenerEventosFavoritos,
+  crearValoracion,
+  verificarValoracion,
 };
